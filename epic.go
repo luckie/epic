@@ -164,14 +164,104 @@ func ContentCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func ContentRead(w http.ResponseWriter, r *http.Request) {
+
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		panic(err)
+	}
+	if err := r.Body.Close(); err != nil {
+		panic(err)
+	}
+
+	id := uuid.NewV4()
+	contentID := uuid.NewV4()
+	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
+
+	if err := json.Unmarshal(body, &c); err != nil {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(422) // unprocessable entity
+		if err := json.NewEncoder(w).Encode(err); err != nil {
+			panic(err)
+		}
+	}
+
+	db.NewRecord(c)
+	db.Create(&c)
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(c); err != nil {
+		panic(err)
+	}
+
 	fmt.Fprint(w, "To be implemented.\n")
 }
 
 func ContentUpdate(w http.ResponseWriter, r *http.Request) {
+
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		panic(err)
+	}
+	if err := r.Body.Close(); err != nil {
+		panic(err)
+	}
+
+	id := uuid.NewV4()
+	contentID := uuid.NewV4()
+	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
+
+	if err := json.Unmarshal(body, &c); err != nil {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(422) // unprocessable entity
+		if err := json.NewEncoder(w).Encode(err); err != nil {
+			panic(err)
+		}
+	}
+
+	db.NewRecord(c)
+	db.Create(&c)
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(c); err != nil {
+		panic(err)
+	}
+
 	fmt.Fprint(w, "To be implemented.\n")
 }
 
 func ContentDelete(w http.ResponseWriter, r *http.Request) {
+
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		panic(err)
+	}
+	if err := r.Body.Close(); err != nil {
+		panic(err)
+	}
+
+	id := uuid.NewV4()
+	contentID := uuid.NewV4()
+	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
+
+	if err := json.Unmarshal(body, &c); err != nil {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(422) // unprocessable entity
+		if err := json.NewEncoder(w).Encode(err); err != nil {
+			panic(err)
+		}
+	}
+
+	db.NewRecord(c)
+	db.Create(&c)
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(c); err != nil {
+		panic(err)
+	}
+
 	fmt.Fprint(w, "To be implemented.\n")
 }
 
