@@ -1,282 +1,102 @@
 package main
 
 import (
-	"encoding/json"
+	"os"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/satori/go.uuid"
-	"io"
-	"io/ioutil"
+	"regexp"
+	"strconv"
 	"log"
-	"net/http"
-	"time"
-
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mssql"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"io"
 )
 
-var db gorm.DB
+var (
+    Trace   *log.Logger
+    Info    *log.Logger
+    Warning *log.Logger
+    Error   *log.Logger
+)
+
+func Init(
+    traceHandle io.Writer,
+    infoHandle io.Writer,
+    warningHandle io.Writer,
+    errorHandle io.Writer) {
+
+    Trace = log.New(traceHandle,
+        "TRACE: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    Info = log.New(infoHandle,
+        "INFO: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    Warning = log.New(warningHandle,
+        "WARNING: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    Error = log.New(errorHandle,
+        "ERROR: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+}
 
 func main() {
-	startDatabase()
-	r := NewRouter()
-	log.Fatal(http.ListenAndServe(":8080", r))
-}
+	Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
+	if len(os.Args) < 3 || len(os.Args) > 4 {
+		fmt.Println("The Epic database connection string must be included as the first parameter.")
+		fmt.Println("e.g. 'postgres://username:password@localhost/epic?sslmode=disable'")
+		fmt.Println("The Epic host URL string must be included as the second parameter.")
+		fmt.Println("e.g. 'example.com' or 'epic.example.com'")
+		fmt.Println("A port number may optionally be included as the third parameter for HTTP (not HTTPS).")
+		fmt.Println("If the port number is not specified, the server will default to HTTPS on port 443.")
+		fmt.Println("If a port number other than 443 is specified, the server will use HTTP on the specified port.")
+		fmt.Println("Any port number below 1025 requires administrative privileges (sudo).")
+		fmt.Println("Here is an example of launching Epic using TLS (HTTPS):")
+		fmt.Println("'sudo epic postgres://username:password@localhost/epic?sslmode=disable example.com'")
+		fmt.Println("Here is an example of launching Epic without TLS (HTTP) on port 8080:")
+		fmt.Println("'epic postgres://username:password@localhost/epic?sslmode=disable example.com 8080'")
+		fmt.Println("Available API Calls:")
+		fmt.Println("GET /content/{uuid}       |  e.g. PUT /content/123e4567-e89b-12d3-a456-426655440000")
+		fmt.Println("PUT /content/{uuid}       |  e.g. PUT /content/123e4567-e89b-12d3-a456-426655440000")
+		fmt.Println("GET /app/{app}/tag/{tag}  |  e.g. GET /app/my-app/tag/my-tag")
+		return
+	} else {
+		dbPattern := "^postgres:\\/\\/[a-z0-9-_]*:[a-z0-9-_]*@[a-z0-9-_]*\\/[a-z0-9-_]*"
+		dbRegex, _ := regexp.Compile(dbPattern)
+    if dbRegex.MatchString(os.Args[1]) != true {
+			fmt.Println("There is a problem with the format of your database connection string.")
+			fmt.Println("Your database connection string: '" + os.Args[1] + "'")
+			fmt.Println("Example database connection string: 'postgres://username:password@localhost/epic?sslmode=disable'")
+			os.Exit(1)
+    } else {
+			urlPattern := "[-a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%_\\+.~#?&//=]*)"
+			urlRegex, _ := regexp.Compile(urlPattern)
+			if urlRegex.MatchString(os.Args[2]) != true {
+				fmt.Println("There is a problem with the format of your host URL.")
+				fmt.Println("Your host URL: '" + os.Args[2] + "'")
+				fmt.Println("Example host URL: 'example.com' or 'epic.example.com'")
+				fmt.Println("It should not include 'http://' or 'https://' or a trailing '/'.")
+				os.Exit(1)
+			} else {
+				if len(os.Args) > 3 {
+					port, err := strconv.Atoi(os.Args[3]);
+					if err != nil {
+						fmt.Println("A port number may optionally be included as the third parameter for HTTP (not HTTPS).")
+						fmt.Println("If the port number is not specified, the server will default to HTTPS on port 443.")
+						fmt.Println("If a port number other than 443 is specified, the server will use HTTP on the specified port.")
+						fmt.Println("Any port number below 1025 requires administrative privileges (sudo).")
+	        	os.Exit(1)
+					} else {
+						initSQLDatabase(os.Args[1])
+						//initServer(os.Args[2], port)
+						Serve(os.Args[2], port)
+					}
+				} else {
+					initSQLDatabase(os.Args[1])
+					//initServer(os.Args[2], 443)
+					Serve(os.Args[2], 443)
+				}
 
-func startDatabase() {
-	db, err := gorm.Open("postgres", "user=gorm dbname=gorm sslmode=disable")
-	if err != nil {
-		panic(err)
-	}
-
-	// Ping function checks the database connectivity
-	err = db.DB().Ping()
-	if err != nil {
-		panic(err)
-	}
-
-	db.SingularTable(true)
-}
-
-type Route struct {
-	Name        string
-	Method      string
-	Pattern     string
-	HandlerFunc http.HandlerFunc
-}
-
-type Routes []Route
-
-type Content struct {
-	ID        uuid.UUID       `json:"-"`
-	ContentID uuid.UUID       `json:"id"`
-	Locale    string          `json:"locale"`
-	Timestamp time.Time       `json:"timestamp"`
-	Value     json.RawMessage `json:"value"`
-}
-
-type Err struct {
-	Code int    `json:"code"`
-	Text string `json:"text"`
-}
-
-var routes = Routes{
-	Route{
-		"Index",
-		"GET",
-		"/",
-		Index,
-	},
-	Route{
-		"ContentIndex",
-		"GET",
-		"/content",
-		ContentIndex,
-	},
-	Route{
-		"ContentCreate",
-		"POST",
-		"/content",
-		ContentCreate,
-	},
-	Route{
-		"ContentRead",
-		"GET",
-		"/content/{id}",
-		ContentRead,
-	},
-	Route{
-		"ContentUpdate",
-		"PUT",
-		"/content/{id}",
-		ContentUpdate,
-	},
-	Route{
-		"ContentDelete",
-		"DELETE",
-		"/content/{id}",
-		ContentDelete,
-	},
-}
-
-func NewRouter() *mux.Router {
-
-	router := mux.NewRouter().StrictSlash(true)
-	for _, route := range routes {
-		var handler http.Handler
-
-		handler = route.HandlerFunc
-		handler = Logger(handler, route.Name)
-
-		router.
-			Methods(route.Method).
-			Path(route.Pattern).
-			Name(route.Name).
-			Handler(handler)
-
-	}
-
-	return router
-}
-
-func Index(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "To be implemented.\n")
-}
-
-func ContentIndex(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "To be implemented.\n")
-}
-
-func ContentCreate(w http.ResponseWriter, r *http.Request) {
-
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
-	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
-	}
-
-	id := uuid.NewV4()
-	contentID := uuid.NewV4()
-	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
-
-	if err := json.Unmarshal(body, &c); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
+			}
 		}
 	}
-
-	db.NewRecord(c)
-	db.Create(&c)
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(c); err != nil {
-		panic(err)
-	}
-
-}
-
-func ContentRead(w http.ResponseWriter, r *http.Request) {
-
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
-	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
-	}
-
-	id := uuid.NewV4()
-	contentID := uuid.NewV4()
-	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
-
-	if err := json.Unmarshal(body, &c); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
-		}
-	}
-
-	db.NewRecord(c)
-	db.Create(&c)
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(c); err != nil {
-		panic(err)
-	}
-
-	fmt.Fprint(w, "To be implemented.\n")
-}
-
-func ContentUpdate(w http.ResponseWriter, r *http.Request) {
-
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
-	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
-	}
-
-	id := uuid.NewV4()
-	contentID := uuid.NewV4()
-	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
-
-	if err := json.Unmarshal(body, &c); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
-		}
-	}
-
-	db.NewRecord(c)
-	db.Create(&c)
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(c); err != nil {
-		panic(err)
-	}
-
-	fmt.Fprint(w, "To be implemented.\n")
-}
-
-func ContentDelete(w http.ResponseWriter, r *http.Request) {
-
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
-	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
-	}
-
-	id := uuid.NewV4()
-	contentID := uuid.NewV4()
-	c := Content{ID: id, ContentID: contentID, Value: body, Timestamp: time.Now()}
-
-	if err := json.Unmarshal(body, &c); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
-		}
-	}
-
-	db.NewRecord(c)
-	db.Create(&c)
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(c); err != nil {
-		panic(err)
-	}
-
-	fmt.Fprint(w, "To be implemented.\n")
-}
-
-func Logger(inner http.Handler, name string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		inner.ServeHTTP(w, r)
-
-		log.Printf(
-			"%s\t%s\t%s\t%s",
-			r.Method,
-			r.RequestURI,
-			name,
-			time.Since(start),
-		)
-	})
 }
