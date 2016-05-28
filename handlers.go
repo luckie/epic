@@ -171,7 +171,7 @@ func AssetUploadURLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
@@ -185,7 +185,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
 	}
-  userPtr, err := Login(&user)
+	userPtr, err := Login(&user)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -239,11 +239,19 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
-  token := context.Get(r, TokenKey).(string)
-  if len(token) > 0 {
-    w.WriteHeader(http.StatusOK)
-  }
-  w.WriteHeader(http.StatusUnauthorized)
+	//var token string
+	token := r.Header.Get("Authorization")
+	//if token, ok := context.Get(r, TokenKey).(string); ok {
+	//
+		if len(token) > 0 {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	//} else {
+	//	fmt.Println("no token")
+	//	w.WriteHeader(http.StatusUnauthorized)
+	//}
 }
 
 func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -257,18 +265,26 @@ func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
 
 func AuthHandler(h http.Handler) http.Handler {
   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Access-Control-Allow-Origin", "*")
+		//w.Header().Set("Access-Control-Allow-Origin", "*")
+	  //w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+		//w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
     w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+    w.Header().Set("Accept", "application/json")
     authHeader := r.Header.Get("Authorization")
     if len(authHeader) > 0 {
       err := Authenticate(authHeader)
       if err != nil {
-        w.WriteHeader(http.StatusUnauthorized)
-      }
-      w.Header().Set("Authorization", authHeader)
-      context.Set(r, TokenKey, authHeader)
-      context.Set(r, AdminKey, true)
+				//fmt.Println("AuthHandler FINAL ERR: " + err.Error())
+				//w.WriteHeader(http.StatusUnauthorized)
+      } else {
+				w.Header().Set("Authorization", authHeader)
+				context.Set(r, TokenKey, authHeader)
+				context.Set(r, AdminKey, true)
+
+			}
+
     }
+		h.ServeHTTP(w, r)
   })
 }
 

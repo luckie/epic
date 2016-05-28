@@ -5,50 +5,26 @@ import (
 	"crypto/tls"
 	"net"
 	"rsc.io/letsencrypt"
-	//"github.com/gorilla/mux"
 	"log"
 	"time"
 	"fmt"
   "strconv"
-
+	"github.com/gorilla/mux"
   "github.com/justinas/alice"
-  // "github.com/rs/cors"
+  "github.com/rs/cors"
 )
-
-//func initServer(url string, port int) {
-//  r := NewRouter()
-//  if port != 443 {
-//    fmt.Println("Starting HTTP Server on port " + strconv.Itoa(port) + ".")
-//    log.Fatal(http.ListenAndServe(":" + strconv.Itoa(port), r))
-//  } else {
-//    fmt.Println("Starting HTTPS Server on port 443 with a Let's Encrypt TLS certificate.")
-//    var m letsencrypt.Manager
-//    if err := m.CacheFile("letsencrypt.cache"); err != nil {
-//      log.Fatal(err)
-//    }
-//    log.Fatal(Serve(&m, r))
-//  }
-//}
-
-//func Serve(m *letsencrypt.Manager, r *mux.Router) error {
-//
-//  l, err := net.Listen("tcp", ":http")
-//	if err != nil {
-//		return err
-//	}
-//	defer l.Close()
-//	go http.Serve(l, http.HandlerFunc(redirectHTTP))
-
-//	return serveHTTPS(m, r)
-//}
 
 func Serve(url string, port int) error {
   r := NewRouter()
-  chain := alice.New(AuthHandler).Then(r)
-
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*",},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS",},
+		AllowedHeaders: []string{"Authorization", "Content-Type", "Accept"},
+	})
+  chain := alice.New(c.Handler, AuthHandler).Then(r)
   if port != 443 {
     fmt.Println("Starting HTTP Server on port " + strconv.Itoa(port) + ".")
-    log.Fatal(http.ListenAndServe(":" + strconv.Itoa(port), r))
+    log.Fatal(http.ListenAndServe(":" + strconv.Itoa(port), chain))
   } else {
     fmt.Println("Starting HTTPS Server on port 443 with a Let's Encrypt TLS certificate.")
     var m letsencrypt.Manager
@@ -122,6 +98,26 @@ func CacheFile(m *letsencrypt.Manager) error {
 		}
 	}()
 	return nil
+}
+
+func NewRouter() *mux.Router {
+
+	router := mux.NewRouter().StrictSlash(true)
+	for _, route := range routes {
+		var handler http.Handler
+
+		handler = route.HandlerFunc
+		handler = Logger(handler, route.Name)
+
+		router.
+			Methods(route.Method).
+			Path(route.Pattern).
+			Name(route.Name).
+			Handler(handler)
+
+	}
+
+	return router
 }
 
 func Logger(inner http.Handler, name string) http.Handler {

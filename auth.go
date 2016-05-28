@@ -3,23 +3,16 @@ package main
 import(
 
   "crypto/ecdsa"
-"crypto/elliptic"
-  //"net/http"
+  "crypto/elliptic"
   "regexp"
   "errors"
-  //"log"
   "time"
   "encoding/base64"
   "github.com/dgrijalva/jwt-go"
-  //"github.com/gorilla/context"
   "golang.org/x/crypto/scrypt"
-  //"bytes"
 	"crypto/rand"
   "fmt"
-  //"github.com/tvdburgt/go-argon2"
   "github.com/satori/go.uuid"
-  //_ "github.com/lib/pq"
-  //"database/sql"
 )
 
 const (
@@ -51,13 +44,14 @@ type UserCryptoBootstrap struct {
 }
 
 func Authenticate(data string) error {
+  //return nil
   pattern := `^([A-Za-z0-9])*.([A-Za-z0-9])*.([A-Za-z0-9])*$`
   //loginPattern := `\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}):::([A-Za-z0-9!@#_-]+?):::([A-Za-z0-9]+?)\b`
   regex, _ := regexp.Compile(pattern)
   if regex.MatchString(data) {
     err := parseToken(data)
     if err != nil {
-      return errors.New("401 Unauthorized: Authentication failed.")
+      return errors.New("parseToken | " + err.Error())
     }
     return nil
   } else {
@@ -65,17 +59,17 @@ func Authenticate(data string) error {
   }
 }
 
-//func Login(username string, password string) (*User, error) {
 func Login(user *User) (*User, error) {
+
   username  :=  user.Username
   password  :=  user.Password
   appID     :=  user.AppID.String()
+
   stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username, epic_user.password, epic_user.salt, epic_user.token, epic_user.token_expires, epic_user.private_key, epic_user.public_key from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id inner join epic.application on application_user.application_id = application.id where epic_user.username = $1 and application.id = $2")
   if err != nil {
     return nil, errors.New("Prepare select from user | " + err.Error())
   }
   defer stmt.Close()
-  //var user User
   err = stmt.QueryRow(username, appID).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.Salt, &user.Token, &user.TokenExpires, &user.PrivateKey, &user.PublicKey)
   if err != nil {
     return nil, errors.New("QueryRow / Scan select from user | " + err.Error())
@@ -179,21 +173,35 @@ func validatePassword(password string) error {
 
 func createToken(user *User) error {
 
+  tokenExpires := time.Now().Add(time.Hour * 168).UTC()
+  user.TokenExpires = &tokenExpires
+
   // Create the token
   //token := jwt.New(jwt.SigningMethodES384)
   token := jwt.New(jwt.SigningMethodHS256)
 
   // Set some claims
+  token.Claims["id"] = user.ID.String()
   token.Claims["first_name"] = user.FirstName
   token.Claims["last_name"] = user.LastName
   token.Claims["email"] = user.Email
+  token.Claims["username"] = user.Username
   token.Claims["admin"] = true
-  token.Claims["exp"] = user.TokenExpires
-  //tokenString, err := token.SignedString([]byte(user.PrivateKey))
-  tokenString, err := token.SignedString([]byte("This-is-the-super-secret-key-for-Epic."))
+  token.Claims["exp"] = user.TokenExpires.Unix()
+  token.Claims["iat"] = time.Now().UTC().Unix()
+  tokenString, err := token.SignedString([]byte("secret"))
   if err != nil {
-    //return errors.New("token.SignedString | " + err.Error() + " | private key: " + user.PrivateKey)
-    return errors.New("token.SignedString | " + err.Error())
+    return errors.New("SignedString | " + err.Error())
+  }
+  
+  stmt, err := db.Prepare("update epic.user set token=$1, token_expires=$2 where id=$3")
+  if err != nil {
+  	return errors.New("Prepare | " + err.Error())
+  }
+  defer stmt.Close()
+  _, err = stmt.Exec(tokenString, tokenExpires, user.ID.String())
+  if err != nil {
+  	return errors.New("Exec | " + err.Error())
   }
   user.Token = &tokenString
   return nil
@@ -201,31 +209,35 @@ func createToken(user *User) error {
 
 func parseToken(requestToken string) error {
 
-  stmt, err := db.Prepare("select user.id, user.first_name, user.last_name, user.email, user.username, user.password, user.salt, user.token, user.token_expires, user.private_key, user.public_key from epic.user where user.token = $1")
+  stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username, epic_user.password, epic_user.salt, epic_user.token, epic_user.token_expires, epic_user.private_key, epic_user.public_key from epic.user as epic_user where epic_user.token = $1")
   if err != nil {
-    return errors.New("Prepare in parseToken | " + err.Error())
+    return errors.New("Prepare | " + err.Error())
   }
   defer stmt.Close()
   var user User
   err = stmt.QueryRow(requestToken).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.Salt, &user.Token, &user.TokenExpires, &user.PrivateKey, &user.PublicKey)
   if err != nil {
-    return errors.New("QueryRow / Scan in parseToken | " + err.Error())
+    return errors.New("QueryRow / Scan | " + err.Error())
   }
   token, err := jwt.Parse(requestToken, func(token *jwt.Token) (interface{}, error) {
     // Don't forget to validate the alg is what you expect:
-    if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
-      return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-    }
-    return &user.PublicKey, nil
+    //if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+//    if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+//      return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+//    }
+    return []byte("secret"), nil
   })
-  if err == nil && token.Valid {
+  if err != nil {
+    return errors.New("Parse | " + err.Error())
+  }
+  if token.Valid {
     err = validateToken(requestToken, user)
     if err != nil {
       return errors.New("validateToken | " + err.Error())
     }
     return nil
   } else {
-      return err
+    return errors.New("Valid? | Token not valid.")
   }
 }
 
@@ -233,9 +245,9 @@ func validateToken(requestToken string, user User) error {
   if requestToken != *user.Token {
     return fmt.Errorf("Authentication token is invalid.")
   }
-  if time.Now().After(*user.TokenExpires) {
-    return fmt.Errorf("Authentication token has expired.")
-  }
+  //if time.Now().After(*user.TokenExpires) {
+  //  return fmt.Errorf("Authentication token has expired.")
+  //}
   return nil
 }
 
