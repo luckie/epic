@@ -193,7 +193,7 @@ func createToken(user *User) error {
   if err != nil {
     return errors.New("SignedString | " + err.Error())
   }
-  
+
   stmt, err := db.Prepare("update epic.user set token=$1, token_expires=$2 where id=$3")
   if err != nil {
   	return errors.New("Prepare | " + err.Error())
@@ -245,9 +245,9 @@ func validateToken(requestToken string, user User) error {
   if requestToken != *user.Token {
     return fmt.Errorf("Authentication token is invalid.")
   }
-  //if time.Now().After(*user.TokenExpires) {
-  //  return fmt.Errorf("Authentication token has expired.")
-  //}
+  if time.Now().After(*user.TokenExpires) {
+    return fmt.Errorf("Authentication token has expired.")
+  }
   return nil
 }
 
