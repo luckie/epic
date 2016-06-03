@@ -187,7 +187,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	userPtr, err := Login(&user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err.Error() == "QueryRow / Scan select from user | sql: no rows in result set" {
+			w.WriteHeader(http.StatusUnauthorized)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
 	} else {
 		user = *userPtr
 		w.Header().Set("Authorization", *user.Token)
