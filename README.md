@@ -119,7 +119,7 @@ Responds with an HTTP Response Code, and a new version 4 UUID in the JSON body.
 }
 ```
 
-### Get Presigned URL For AWS S3 PUT Operation
+### Create Presigned URL For AWS S3 PUT Operation
 Requires authorization.
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental variables with appropriate values.
 HTTP POST request with JSON body to "/asset/url".
@@ -136,6 +136,25 @@ Responds with an HTTP Response Code and JSON body.
   "key":"asset-key-for-s3",
   "url":"https://epic-content-assets.s3.amazonaws.com/asset-key-for-s3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIMTULOINQ3C24OUQ%2F20160517%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20160517T123628Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=926629e70dc3cc777943b500975d5764a4824aac8d40fc63d81cda8a9d6f733c",
   "error":""
+}
+```
+
+### Bootstrap Crypto For Initial Admin User
+Does not persist its output for security reasons.  Just responds with JSON that can be manually input into database.
+HTTP POST request with plain-text password in JSON body to "/auth/crypto".
+```
+{
+  "plain-text":"mellon"
+}
+```
+Responds with an HTTP Response Code and JSON body that includes the plain-text password, hashed password, salt, private key, and public key.
+```
+{
+  "plain-text":"mellon",
+  "hash": "zVfyekeU8ZQyvhaV/ESZPNfZZtBmCjQOMORWB42Kf1k=",
+  "salt": "TJXaDWu3aSshT9PCxzShrk71QlbYVciVuAKRMQD1gYuRzWq4O1uC30RxR+P65/aBKpkNwNMTX/NWG4oRxM9kXw==",
+  "private-key": "&{{c82000a340 a1b92c9bc85cdcf3d4691240db94913e192d7892faa808439f35cb975addef5251741dcfc1e013b696017dd14e835246 8be42e5c4a13fbec6797ec6c2822cc572a86264056fe38a08fb3898ce63bc021c317442218e119f0d2a4fab6b7b39162} 980f075a93c83ea6f897236c018e6965f1ea8cf75c60da3864c8f0903413cf06fc091803f7101f78cc5943df8754b8ee}",
+  "public-key": "{c82000a340 a1b92c9bc85cdcf3d4691240db94913e192d7892faa808439f35cb975addef5251741dcfc1e013b696017dd14e835246 8be42e5c4a13fbec6797ec6c2822cc572a86264056fe38a08fb3898ce63bc021c317442218e119f0d2a4fab6b7b39162}"
 }
 ```
 
