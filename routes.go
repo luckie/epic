@@ -81,7 +81,7 @@ var routes = Routes{
 	},
 	Route{
 		"AssetUploadURL",
-		"GET", // or should this be POST?
+		"POST", 
 		"/asset/url",
 		AssetUploadURLHandler,
 	},

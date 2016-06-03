@@ -122,14 +122,20 @@ Responds with an HTTP Response Code, and a new version 4 UUID in the JSON body.
 ### Get Presigned URL For AWS S3 PUT Operation
 Requires authorization.
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental variables with appropriate values.
-HTTP GET request to "/asset/url".
-Responds with an HTTP Response Code.
+HTTP POST request with JSON body to "/asset/url".
+```
+{
+  "bucket":"epic-content-assets",
+  "key":"asset-key-for-s3"
+}
+```
+Responds with an HTTP Response Code and JSON body.
 ```
 {
   "bucket":"epic-content-assets",
   "key":"asset-key-for-s3",
   "url":"https://epic-content-assets.s3.amazonaws.com/asset-key-for-s3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIMTULOINQ3C24OUQ%2F20160517%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20160517T123628Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=926629e70dc3cc777943b500975d5764a4824aac8d40fc63d81cda8a9d6f733c",
-  "error":"",
+  "error":""
 }
 ```
 

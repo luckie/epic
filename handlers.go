@@ -284,7 +284,7 @@ func AuthHandler(h http.Handler) http.Handler {
       } else {
 				w.Header().Set("Authorization", authHeader)
 				context.Set(r, TokenKey, authHeader)
-				context.Set(r, AdminKey, true)
+				context.Set(r, AdminKey, "true")
 
 			}
 
@@ -294,10 +294,15 @@ func AuthHandler(h http.Handler) http.Handler {
 }
 
 func verifyAdmin(w http.ResponseWriter, r *http.Request) {
-  if context.Get(r, AdminKey).(bool) != true {
-    w.WriteHeader(http.StatusUnauthorized)
-  }
-  return
+	adminKey, ok := context.GetOk(r, AdminKey)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+	} else {
+		admin, ok := adminKey.(string)
+		if !ok || admin != "true" {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}
 }
 
 func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {
