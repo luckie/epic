@@ -50,8 +50,7 @@ HTTP POST request with JSON body to "/content"
 Responds with an HTTP Response Code and JSON body that either has the new Content ID or an error message.
 ```
 {
-  "id":"123e4567-e89b-12d3-a456-426655440000",
-  "error":""
+  "id":"123e4567-e89b-12d3-a456-426655440000"
 }
 ```
 

@@ -63,10 +63,12 @@ func CreateContentReservationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	err = CreateContentReservation(&c)
   if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
+    c.Error = err
   }
+	id := ID{}
+	id.ID = c.ID.String()
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(c); err != nil {
+	if err := json.NewEncoder(w).Encode(id); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }

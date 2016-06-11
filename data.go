@@ -40,7 +40,7 @@ type Content struct {
 	AppID 			uuid.UUID `json:"app-id, omitempty"`
 	Name    		string    `json:"name, omitempty"`
 	Description	string    `json:"description, omitempty"`
-	Timestamp 	time.Time `json:"timestamp, omitempty"`
+	Error				error			`json:"error, omitempty"`
 }
 
 type Entry struct {
@@ -54,6 +54,10 @@ type Entry struct {
 type Err struct {
 	Code int    `json:"code"`
 	Text string `json:"text"`
+}
+
+type ID struct {
+	ID	string `json:"id"`
 }
 
 func NewestEntryForContentID(contentID string) (*Entry, error) {
@@ -71,13 +75,13 @@ func NewestEntryForContentID(contentID string) (*Entry, error) {
 
 func CreateContentReservation(c *Content) error {
 	c.ID = uuid.NewV4()
-	c.Timestamp = time.Now()
+	timestamp := time.Now()
 	e_stmt, err := db.Prepare("insert into epic.content (id, application_id, name, description, timestamp) values ($1, $2, $3, $4, $5)")
   if err != nil {
   	return err
   }
   defer e_stmt.Close()
-  _, err = e_stmt.Exec(c.ID.String(), c.AppID.String(), c.Name, c.Description, c.Timestamp)
+  _, err = e_stmt.Exec(c.ID.String(), c.AppID.String(), c.Name, c.Description, timestamp)
   if err != nil {
   	return err
   }
