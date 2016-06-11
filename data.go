@@ -35,6 +35,14 @@ type Route struct {
 
 type Routes []Route
 
+type Content struct {
+	ID        	uuid.UUID	`json:"id, omitempty"`
+	AppID 			uuid.UUID `json:"app-id, omitempty"`
+	Name    		string    `json:"name, omitempty"`
+	Description	string    `json:"description, omitempty"`
+	Timestamp 	time.Time `json:"timestamp, omitempty"`
+}
+
 type Entry struct {
 	ID        uuid.UUID	`json:"-"`
 	ContentID uuid.UUID `json:"id"`
@@ -61,23 +69,32 @@ func NewestEntryForContentID(contentID string) (*Entry, error) {
   return &e, nil
 }
 
+func CreateContentReservation(c *Content) error {
+	c.ID = uuid.NewV4()
+	c.Timestamp = time.Now()
+	e_stmt, err := db.Prepare("insert into epic.content (id, application_id, name, description, timestamp) values ($1, $2, $3, $4, $5)")
+  if err != nil {
+  	return err
+  }
+  defer e_stmt.Close()
+  _, err = e_stmt.Exec(c.ID.String(), c.AppID.String(), c.Name, c.Description, c.Timestamp)
+  if err != nil {
+  	return err
+  }
+	return nil
+}
+
 func CreateEntryForContentID(e *Entry) error {
-  var localeID string
-  l_stmt, err := db.Prepare("select locale.id from epic.locale where locale.code = $1")
-  if err != nil {
-    return err
-  }
-  defer l_stmt.Close()
-  err = l_stmt.QueryRow(e.Locale).Scan(&localeID)
-  if err != nil {
-    return err
-  }
+	locID, err := localeID(e.Locale)
+	if err != nil {
+		return err
+	}
   e_stmt, err := db.Prepare("insert into epic.entry (id, content_id, locale_id, timestamp, data) values ($1, $2, $3, $4, $5)")
   if err != nil {
   	return err
   }
   defer e_stmt.Close()
-  _, err = e_stmt.Exec(e.ID.String(), e.ContentID.String(), localeID, e.Timestamp, e.Data)
+  _, err = e_stmt.Exec(e.ID.String(), e.ContentID.String(), locID.String(), e.Timestamp, e.Data)
   if err != nil {
   	return err
   }
@@ -152,13 +169,26 @@ func TagContent(contentID string, tag string) error {
 UTILITIES
 */
 
-func AppID(AppCode string) (uuid.UUID, error) {
+func AppID(appCode string) (uuid.UUID, error) {
 	stmt, err := db.Prepare("select id from epic.application where code = $1")
 	if err != nil {
 		return uuid.Nil, err
 	}
 	var id uuid.UUID
-	err = stmt.QueryRow(AppCode).Scan(&id)
+	err = stmt.QueryRow(appCode).Scan(&id)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return id, nil
+}
+
+func localeID(localeCode string) (uuid.UUID, error) {
+	stmt, err := db.Prepare("select locale.id from epic.locale where locale.code = $1")
+	if err != nil {
+		return uuid.Nil, err
+	}
+	var id uuid.UUID
+	err = stmt.QueryRow(localeCode).Scan(&id)
 	if err != nil {
 		return uuid.Nil, err
 	}

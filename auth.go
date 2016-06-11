@@ -45,7 +45,7 @@ type UserCryptoBootstrap struct {
 
 func Authenticate(data string) error {
   //return nil
-  pattern := `^([A-Za-z0-9])*.([A-Za-z0-9])*.([A-Za-z0-9])*$`
+  pattern := `^([A-Za-z0-9-])*.([A-Za-z0-9-])*.([A-Za-z0-9-])*$`
   //loginPattern := `\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}):::([A-Za-z0-9!@#_-]+?):::([A-Za-z0-9]+?)\b`
   regex, _ := regexp.Compile(pattern)
   if regex.MatchString(data) {
@@ -139,6 +139,19 @@ func CreateUser(user *User) (*User, error) {
 	}
 	return user, nil
 }
+
+func GetUser(id string) (User, error) {
+
+  user := User{}
+  return user, nil
+}
+
+func GetAllUsers() ([]User, error) {
+  var users []User
+  return users, nil
+}
+
+
 
 func UUID() string {
   return uuid.NewV4().String()

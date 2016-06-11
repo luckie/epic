@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	//"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -42,6 +43,35 @@ func ListContentHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "To be implemented.\n")
 }
 
+func CreateContentReservationHandler(w http.ResponseWriter, r *http.Request) {
+  if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
+  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+	if err := r.Body.Close(); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+	c := Content{}
+	if err := json.Unmarshal(body, &c); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+	}
+	err = CreateContentReservation(&c)
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+  }
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(c); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+}
+
 func ReadContentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
   contentID := vars["id"]
@@ -50,7 +80,7 @@ func ReadContentHandler(w http.ResponseWriter, r *http.Request) {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
-	//w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(e); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
@@ -58,7 +88,9 @@ func ReadContentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateContentHandler(w http.ResponseWriter, r *http.Request) {
-  verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -77,7 +109,7 @@ func UpdateContentHandler(w http.ResponseWriter, r *http.Request) {
 	e.Timestamp = time.Now()
   err = CreateEntryForContentID(&e)
   if err != nil {
-    log.Println(err)
+    http.Error(w, err.Error(), http.StatusInternalServerError)
   }
 	w.WriteHeader(http.StatusCreated)
 }
@@ -87,7 +119,9 @@ func ListTagsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateTagHandler(w http.ResponseWriter, r *http.Request) {
-  verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   vars := mux.Vars(r)
   tag := vars["tag"]
   appID := vars["app-uuid"]
@@ -98,7 +132,9 @@ func CreateTagHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
-  verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   fmt.Fprint(w, "To be implemented.\n")
 }
 
@@ -119,7 +155,9 @@ func ReadAllContentForTagHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
-  verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   vars := mux.Vars(r)
   contentID := vars["content-uuid"]
   tag := vars["tag"]
@@ -133,7 +171,9 @@ func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AssetUploadURLHandler(w http.ResponseWriter, r *http.Request) {
-  verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -215,7 +255,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-  //verifyAdmin(w,r)
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
   body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -243,6 +285,42 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetUserHandler(w http.ResponseWriter, r *http.Request) {
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+	}
+	vars := mux.Vars(r)
+	id := vars["id"]
+	if id != "" {
+		user, err := GetUser(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(user); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				//return
+			}
+		}
+	} else {
+		users, err := GetAllUsers()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(users); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				//return
+			}
+		}
+	}
+
+}
+
+func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "To be implemented.\n")
+}
+
 func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
 	//var token string
 	token := r.Header.Get("Authorization")
@@ -251,12 +329,45 @@ func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
 		if len(token) > 0 {
 			w.WriteHeader(http.StatusOK)
 		} else {
+			fmt.Println("Token length is zero.")
 			w.WriteHeader(http.StatusUnauthorized)
 		}
 	//} else {
 	//	fmt.Println("no token")
 	//	w.WriteHeader(http.StatusUnauthorized)
 	//}
+}
+
+func AuthHandler(h http.Handler) http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+    w.Header().Set("Accept", "application/json")
+    authHeader := r.Header.Get("Authorization")
+    if authHeader != "" {
+			err := Authenticate(authHeader)
+      if err == nil {
+				w.Header().Set("Authorization", authHeader)
+				context.Set(r, TokenKey, authHeader)
+				context.Set(r, AdminKey, "true")
+			}
+    }
+		h.ServeHTTP(w, r)
+  })
+}
+
+func verifyAdmin(r *http.Request) bool {
+	adminKey, ok := context.GetOk(r, AdminKey)
+	if !ok {
+		return false
+	}
+	admin, ok := adminKey.(string)
+	if !ok {
+		return false
+	}
+	if admin != "true" {
+		return false
+	}
+	return true
 }
 
 func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -268,41 +379,8 @@ func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
   }
 }
 
-func AuthHandler(h http.Handler) http.Handler {
-  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//w.Header().Set("Access-Control-Allow-Origin", "*")
-	  //w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
-		//w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
-    w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-    w.Header().Set("Accept", "application/json")
-    authHeader := r.Header.Get("Authorization")
-    if len(authHeader) > 0 {
-      err := Authenticate(authHeader)
-      if err != nil {
-				//fmt.Println("AuthHandler FINAL ERR: " + err.Error())
-				//w.WriteHeader(http.StatusUnauthorized)
-      } else {
-				w.Header().Set("Authorization", authHeader)
-				context.Set(r, TokenKey, authHeader)
-				context.Set(r, AdminKey, "true")
-
-			}
-
-    }
-		h.ServeHTTP(w, r)
-  })
-}
-
-func verifyAdmin(w http.ResponseWriter, r *http.Request) {
-	adminKey, ok := context.GetOk(r, AdminKey)
-	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-	} else {
-		admin, ok := adminKey.(string)
-		if !ok || admin != "true" {
-			w.WriteHeader(http.StatusUnauthorized)
-		}
-	}
+func UpdateUserPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "To be implemented.\n")
 }
 
 func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {

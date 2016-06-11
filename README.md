@@ -37,6 +37,24 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA epic TO epic;
 ### Read Content
 HTTP GET request to ""/content/{id}"
 
+### Create Content
+Requires authorization
+HTTP POST request with JSON body to "/content"
+```
+{
+  "app-id":"123e4567-e89b-12d3-a456-426655440000",
+  "name":"Left side-bar, bottom",
+  "description":"Text that appears at the bottom of the left side-bar."
+}
+```
+Responds with an HTTP Response Code and JSON body that either has the new Content ID or an error message.
+```
+{
+  "id":"123e4567-e89b-12d3-a456-426655440000",
+  "error":""
+}
+```
+
 ### Update Content
 Requires authorization
 HTTP PUT request with JSON body to "/content/{id}"
@@ -44,7 +62,6 @@ HTTP PUT request with JSON body to "/content/{id}"
 {
   "id":"123e4567-e89b-12d3-a456-426655440000",
   "locale":"us-EN",
-  "timestamp":"2016-04-15T18:20:00Z",
   "data": {
     "id":"123",
     "your-data":"whatever-you-want"

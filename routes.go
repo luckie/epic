@@ -8,6 +8,12 @@ var routes = Routes{
 		IndexHandler,
 	},
 	Route{
+		"CreateContent",
+		"POST",
+		"/content",
+		CreateContentReservationHandler,
+	},
+	Route{
 		"ReadContent",
 		"GET",
 		"/content/{id}",
@@ -68,6 +74,18 @@ var routes = Routes{
 		CreateUserHandler,
 	},
 	Route{
+		"GetUser",
+		"GET",
+		"/auth/user",
+		GetUserHandler,
+	},
+	Route{
+		"DeleteUser",
+		"DELETE",
+		"/auth/user",
+		DeleteUserHandler,
+	},
+	Route{
 		"AuthenticateToken",
 		"POST",
 		"/auth/token",
@@ -81,9 +99,15 @@ var routes = Routes{
 	},
 	Route{
 		"AssetUploadURL",
-		"POST", 
+		"POST",
 		"/asset/url",
 		AssetUploadURLHandler,
+	},
+	Route{
+		"UpdateUserPassword",
+		"PUT",
+		"/auth/user/password",
+		UpdateUserPasswordHandler,
 	},
 	Route{
 		"UserCryptoBootstrap",
