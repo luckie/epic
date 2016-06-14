@@ -19,9 +19,9 @@ import (
   "github.com/satori/go.uuid"
 )
 
-type key int
-const TokenKey key = 0
-const AdminKey key = 1
+//type key int
+//const TokenKey key = 0
+//const AdminKey key = 1
 
 type S3PutRequest struct {
   Bucket  string `json:"bucket"`
@@ -30,7 +30,7 @@ type S3PutRequest struct {
   Error     string `json:"error"`
 }
 
-type NewUUID struct {
+type UUID struct {
 	UUID 		string `json:"uuid"`
 }
 
@@ -44,7 +44,8 @@ func ListContentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateContentReservationHandler(w http.ResponseWriter, r *http.Request) {
-  if !verifyAdmin(r) {
+
+	if !verifyAdmin(r) {
 		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
 	}
   body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -294,26 +295,30 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 	if id != "" {
-		user, err := GetUser(id)
+		user, err := GetUser(id, "appID TBD via token / context")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		} else {
-			w.WriteHeader(http.StatusOK)
 			if err := json.NewEncoder(w).Encode(user); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
-				//return
+				return
 			}
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 	} else {
-		users, err := GetAllUsers()
+		users, err := GetAllUsers("appID TBD via token / context")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		} else {
-			w.WriteHeader(http.StatusOK)
 			if err := json.NewEncoder(w).Encode(users); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
-				//return
+				return
 			}
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 	}
 
@@ -324,33 +329,31 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
-	//var token string
 	token := r.Header.Get("Authorization")
-	//if token, ok := context.Get(r, TokenKey).(string); ok {
-	//
-		if len(token) > 0 {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			fmt.Println("Token length is zero.")
-			w.WriteHeader(http.StatusUnauthorized)
-		}
-	//} else {
-	//	fmt.Println("no token")
-	//	w.WriteHeader(http.StatusUnauthorized)
-	//}
+	_, err := Authenticate(token)
+	if err == nil {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
 }
 
 func AuthHandler(h http.Handler) http.Handler {
   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
     w.Header().Set("Accept", "application/json")
-    authHeader := r.Header.Get("Authorization")
-    if authHeader != "" {
-			err := Authenticate(authHeader)
-      if err == nil {
-				w.Header().Set("Authorization", authHeader)
-				context.Set(r, TokenKey, authHeader)
-				context.Set(r, AdminKey, "true")
+    token := r.Header.Get("Authorization")
+    if token != "" {
+			claims, err := Authenticate(token)
+			if err == nil {
+				w.Header().Set("Authorization", token)
+				context.Set(r, "Token", token)
+				context.Set(r, "UserID", claims["UserID"])
+				context.Set(r, "FirstName", claims["FirstName"])
+				context.Set(r, "LastName", claims["LastName"])
+				context.Set(r, "Email", claims["Email"])
+				context.Set(r, "Username", claims["Username"])
+				context.Set(r, "AppID", claims["AppID"])
 			}
     }
 		h.ServeHTTP(w, r)
@@ -358,7 +361,9 @@ func AuthHandler(h http.Handler) http.Handler {
 }
 
 func verifyAdmin(r *http.Request) bool {
-	adminKey, ok := context.GetOk(r, AdminKey)
+	// Temp using AppID below from within the tokenID
+	// as a proxy for validating a user is an admin.
+	adminKey, ok := context.GetOk(r, "AppID")
 	if !ok {
 		return false
 	}
@@ -366,15 +371,15 @@ func verifyAdmin(r *http.Request) bool {
 	if !ok {
 		return false
 	}
-	if admin != "true" {
+	if admin == "" {
 		return false
 	}
 	return true
 }
 
 func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
-	uuid := NewUUID{}
-  uuid.UUID = UUID()
+	uuid := UUID{}
+  uuid.UUID = NewUUID()
   if err := json.NewEncoder(w).Encode(uuid); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return

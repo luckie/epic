@@ -1,7 +1,9 @@
 # Epic Content Microservice
-##### A minimalist content management system (CMS) API that persists content as JSON to a database.  It is scalable, device-agnostic, extremely performant, and does not impose any architectural constraints upon the user experience that is using it.
+##### A minimalist content management system (CMS) API that persists content as JSON to a database.  It is scalable, device-agnostic, extremely performant, and does not impose any architectural constraints upon the user experience that is using it.  Epic is a Go language program that is compiled into a platform-specific native binary, and usually deployed as a Docker container.
 
-##### Epic is a Go language program that is compiled into a platform-specific native binary, and usually deployed as a Docker container.
+##### Epic is not for everyone - especially not for fans of WordPress, Drupal, or Joomla.  Epic is for technically-savvy developers who can not express their creativity, while being constrained by traditional CMS limitations and tradeoffs.  99% of those using a traditional CMS should not even consider using Epic, because Epic assumes a robust modern client-side development skill set.
+
+##### Epic addresses a very specific niche that other CMS have not successfully fulfilled.  The inception of Epic was motivated by the need for a fully-functional open source CMS designed from the ground up to drive highly-customized ultra-rich user experiences that are delivered to end users via modern JavaScript frameworks (e.g. Ember, Angular, React) and native mobile apps (e.g. iOS and Android).  The CMS would have to play nice with unrelated systems supported by the client - never getting in the way; never forcing unrelated systems to do things "the Epic way".
 
 ##### The Epic API is benefiting from rapid development, and new features are being released regularly.  Accordingly, it is subject to change without warning.  Once it stabilizes, the Epic API will follow semantic versioning.
 
