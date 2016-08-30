@@ -1,61 +1,61 @@
 package main
 
 import (
-	"net/http"
 	"crypto/tls"
-	"net"
-	"rsc.io/letsencrypt"
-	"log"
-	"time"
 	"fmt"
-  "strconv"
 	"github.com/gorilla/mux"
-  "github.com/justinas/alice"
-  "github.com/rs/cors"
+	"github.com/justinas/alice"
+	"github.com/rs/cors"
+	"log"
+	"net"
+	"net/http"
+	"rsc.io/letsencrypt"
+	"strconv"
+	"time"
 )
 
 func Serve(url string, port int) error {
-  r := NewRouter()
+	r := NewRouter()
 	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*",},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS",},
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Authorization", "Content-Type", "Accept"},
 	})
-  chain := alice.New(c.Handler, AuthHandler).Then(r)
-  if port != 443 {
-    fmt.Println("Starting HTTP Server on port " + strconv.Itoa(port) + ".")
-    log.Fatal(http.ListenAndServe(":" + strconv.Itoa(port), chain))
-  } else {
-    fmt.Println("Starting HTTPS Server on port 443 with a Let's Encrypt TLS certificate.")
-    var m letsencrypt.Manager
-    //if err := m.CacheFile("letsencrypt.cache"); err != nil {
-    if err := CacheFile(&m); err != nil {
+	chain := alice.New(c.Handler, AuthHandler).Then(r)
+	if port != 443 {
+		fmt.Println("Starting HTTP Server on port " + strconv.Itoa(port) + ".")
+		log.Fatal(http.ListenAndServe(":"+strconv.Itoa(port), chain))
+	} else {
+		fmt.Println("Starting HTTPS Server on port 443 with a Let's Encrypt TLS certificate.")
+		var m letsencrypt.Manager
+		//if err := m.CacheFile("letsencrypt.cache"); err != nil {
+		if err := CacheFile(&m); err != nil {
 			fmt.Println(err)
-      log.Fatal(err)
-    }
+			log.Fatal(err)
+		}
 
-    l, err := net.Listen("tcp", ":http")
-    if err != nil {
+		l, err := net.Listen("tcp", ":http")
+		if err != nil {
 			fmt.Println(err)
-    	return err
-    }
-    defer l.Close()
-    go http.Serve(l, http.HandlerFunc(redirectHTTP))
+			return err
+		}
+		defer l.Close()
+		go http.Serve(l, http.HandlerFunc(redirectHTTP))
 
-    //return serveHTTPS(&m, &r)
-    log.Fatal(serveHTTPS(&m, chain))
+		//return serveHTTPS(&m, &r)
+		log.Fatal(serveHTTPS(&m, chain))
 
-  }
-  return nil
+	}
+	return nil
 
 }
 
 //func serveHTTPS(m *letsencrypt.Manager, r *mux.Router) error {
 func serveHTTPS(m *letsencrypt.Manager, chain http.Handler) error {
-  srv := &http.Server{
-		Addr:    ":https",
+	srv := &http.Server{
+		Addr: ":https",
 		//Handler: r,
-    Handler: chain,
+		Handler: chain,
 		TLSConfig: &tls.Config{
 			GetCertificate: m.GetCertificate,
 		},
@@ -90,10 +90,10 @@ func CacheFile(m *letsencrypt.Manager) error {
 	go func() {
 		for range m.Watch() {
 			//err := ioutil.WriteFile(name, []byte(m.Marshal()), 0600)
-      err := updateLetsEncryptCache(m.Marshal(), "schutt")
+			err := updateLetsEncryptCache(m.Marshal(), "schutt")
 			if err != nil {
 				log.Printf("writing letsencrypt cache: %v", err)
-        fmt.Println("data marshal error: " + err.Error())
+				fmt.Println("data marshal error: " + err.Error())
 			}
 		}
 	}()

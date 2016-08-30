@@ -2,21 +2,21 @@ package main
 
 import (
 	"encoding/json"
-	//"errors"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-  "log"
+	"log"
 	"net/http"
-  //"strings"
+	//"strings"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/gorilla/context"
+	"github.com/gorilla/mux"
+	"github.com/satori/go.uuid"
 	"time"
-  "github.com/aws/aws-sdk-go/aws"
-  "github.com/aws/aws-sdk-go/aws/credentials"
-  "github.com/aws/aws-sdk-go/aws/session"
-  "github.com/aws/aws-sdk-go/service/s3"
-  "github.com/gorilla/mux"
-  "github.com/gorilla/context"
-  "github.com/satori/go.uuid"
 )
 
 //type key int
@@ -24,16 +24,15 @@ import (
 //const AdminKey key = 1
 
 type S3PutRequest struct {
-  Bucket  string `json:"bucket"`
-  Key     string `json:"key"`
-  URL     string `json:"url"`
-  Error     string `json:"error"`
+	Bucket string `json:"bucket"`
+	Key    string `json:"key"`
+	URL    string `json:"url"`
+	Error  string `json:"error"`
 }
 
 type UUID struct {
-	UUID 		string `json:"uuid"`
+	UUID string `json:"uuid"`
 }
-
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "To be implemented.\n")
@@ -46,75 +45,81 @@ func ListContentHandler(w http.ResponseWriter, r *http.Request) {
 func CreateContentReservationHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := r.Body.Close(); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	c := Content{}
 	if err := json.Unmarshal(body, &c); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	err = CreateContentReservation(&c)
-  if err != nil {
-    c.Error = err
-  }
+	if err != nil {
+		c.Error = err
+	}
 	id := ID{}
 	id.ID = c.ID.String()
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(id); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func ReadContentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-  contentID := vars["id"]
-  e, err := NewestEntryForContentID(contentID)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	contentID := vars["id"]
+	e, err := NewestEntryForContentID(contentID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(e); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func UpdateContentHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := r.Body.Close(); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	e := Entry{}
 	if err := json.Unmarshal(body, &e); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	e.ID = uuid.NewV4()
 	e.Timestamp = time.Now()
-  err = CreateEntryForContentID(&e)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-  }
-	w.WriteHeader(http.StatusCreated)
+	err = CreateEntryForContentID(&e)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	//w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(e); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func ListTagsHandler(w http.ResponseWriter, r *http.Request) {
@@ -123,110 +128,131 @@ func ListTagsHandler(w http.ResponseWriter, r *http.Request) {
 
 func CreateTagHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  vars := mux.Vars(r)
-  tag := vars["tag"]
-  appID := vars["app-uuid"]
-  err := CreateTag(tag, appID)
-  if err != nil {
-    log.Println(err)
-  }
+	vars := mux.Vars(r)
+	tag := vars["tag"]
+	appID := vars["app-uuid"]
+	err := CreateTag(tag, appID)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  fmt.Fprint(w, "To be implemented.\n")
+	fmt.Fprint(w, "To be implemented.\n")
 }
 
 func ReadAllContentForTagHandler(w http.ResponseWriter, r *http.Request) {
-  vars := mux.Vars(r)
-  tag := vars["tag"]
-  appID := vars["app-uuid"]
-  e, err := AllContentForTag(tag, appID)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	vars := mux.Vars(r)
+	tag := vars["tag"]
+	appID := vars["app-uuid"]
+	e, err := AllContentForTag(tag, appID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(e); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func ReadNewestLocalizedContentEntriesForTagHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	tag := vars["tag"]
+	locale := vars["locale"]
+	appID := vars["app-id"]
+	e, err := NewestLocalizedContentEntriesForTag(tag, locale, appID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(e); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
 func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  vars := mux.Vars(r)
-  contentID := vars["content-uuid"]
-  tag := vars["tag"]
+	vars := mux.Vars(r)
+	contentID := vars["content-uuid"]
+	tag := vars["tag"]
 
-  err := TagContent(contentID, tag)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	err := TagContent(contentID, tag)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
 func AssetUploadURLHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := r.Body.Close(); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	put := S3PutRequest{}
 	if err := json.Unmarshal(body, &put); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-  svc := s3.New(session.New(),&aws.Config{
-    Region: aws.String("us-east-1"),
-    Credentials: credentials.NewEnvCredentials(),
-    },)
-  por, _ := svc.PutObjectRequest(&s3.PutObjectInput{
-    Bucket: aws.String(put.Bucket),
-    Key:    aws.String(put.Key),
-  })
-  url, err := por.Presign(15 * time.Minute)
-  if err != nil {
-    put.Error = err.Error()
-    w.WriteHeader(http.StatusBadRequest)
-  } else {
-    put.URL = url
-    w.WriteHeader(http.StatusOK)
-  }
+	svc := s3.New(session.New(), &aws.Config{
+		Region:      aws.String("us-east-1"),
+		Credentials: credentials.NewEnvCredentials(),
+	})
+	por, _ := svc.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String(put.Bucket),
+		Key:    aws.String(put.Key),
+	})
+	url, err := por.Presign(15 * time.Minute)
+	if err != nil {
+		put.Error = err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+	} else {
+		put.URL = url
+		w.WriteHeader(http.StatusOK)
+	}
 	if err := json.NewEncoder(w).Encode(&put); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := r.Body.Close(); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	user := User{}
 	if err := json.Unmarshal(body, &user); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	userPtr, err := Login(&user)
 	if err != nil {
@@ -248,34 +274,39 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-  token := r.Header.Get("Authorization")
-  err := Logout(token)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	userID, err := fromContext("UserID", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = Logout(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-  body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := r.Body.Close(); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	user := User{}
 	if err := json.Unmarshal(body, &user); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-  userPtr, err := CreateUser(&user)
+	userPtr, err := CreateUser(&user)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -290,12 +321,18 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized); return
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
 	}
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.URL.Query().Get("id")
+	appID, err := fromContext("AppID", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 	if id != "" {
-		user, err := GetUser(id, "appID TBD via token / context")
+		u, err := GetUser(id, appID)
+		user := *u
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -304,11 +341,9 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusOK)
-			return
 		}
 	} else {
-		users, err := GetAllUsers("appID TBD via token / context")
+		users, err := GetAllUsers(appID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -317,15 +352,42 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusOK)
-			return
 		}
 	}
-
 }
 
 func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "To be implemented.\n")
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
+	}
+	var err error
+	userID := r.URL.Query().Get("user-id")
+	appID := r.URL.Query().Get("app-id")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userID == "" {
+		userID, err = fromContext("UserID", r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if appID == "" {
+		appID, err = fromContext("AppID", r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	err = DeleteUser(userID, appID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -339,14 +401,14 @@ func AuthenticateTokenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AuthHandler(h http.Handler) http.Handler {
-  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-    w.Header().Set("Accept", "application/json")
-    token := r.Header.Get("Authorization")
-    if token != "" {
+		w.Header().Set("Accept", "application/json")
+		token := r.Header.Get("Authorization")
+		if token != "" {
 			claims, err := Authenticate(token)
 			if err == nil {
-				w.Header().Set("Authorization", token)
+				//w.Header().Set("Authorization", token)
 				context.Set(r, "Token", token)
 				context.Set(r, "UserID", claims["UserID"])
 				context.Set(r, "FirstName", claims["FirstName"])
@@ -354,24 +416,25 @@ func AuthHandler(h http.Handler) http.Handler {
 				context.Set(r, "Email", claims["Email"])
 				context.Set(r, "Username", claims["Username"])
 				context.Set(r, "AppID", claims["AppID"])
+				context.Set(r, "TokenExpires", claims["exp"])
+				context.Set(r, "TokenCreated", claims["iat"])
+				fmt.Println("TokenExpires: " + claims["exp"].(string))
+				fmt.Println("TokenCreated: " + claims["iat"].(string))
 			}
-    }
+		}
 		h.ServeHTTP(w, r)
-  })
+	})
 }
 
 func verifyAdmin(r *http.Request) bool {
 	// Temp using AppID below from within the tokenID
 	// as a proxy for validating a user is an admin.
-	adminKey, ok := context.GetOk(r, "AppID")
-	if !ok {
+	val, err := fromContext("AppID", r)
+	if err != nil {
 		return false
 	}
-	admin, ok := adminKey.(string)
-	if !ok {
-		return false
-	}
-	if admin == "" {
+	// This test below is insuffient. Needs real test.
+	if val == "" {
 		return false
 	}
 	return true
@@ -379,15 +442,50 @@ func verifyAdmin(r *http.Request) bool {
 
 func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	uuid := UUID{}
-  uuid.UUID = NewUUID()
-  if err := json.NewEncoder(w).Encode(uuid); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+	uuid.UUID = NewUUID()
+	if err := json.NewEncoder(w).Encode(uuid); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-func UpdateUserPasswordHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "To be implemented.\n")
+func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if !verifyAdmin(r) {
+		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+		return
+	}
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := r.Body.Close(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var user User
+	if err := json.Unmarshal(body, &user); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userID, err := fromContext("UserID", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if user.ID.String() == "00000000-0000-0000-0000-000000000000" {
+		err = UpdatePassword(user.Password, userID)
+	} else {
+		err = UpdatePassword(user.Password, user.ID.String())
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(struct{}{}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {
@@ -430,4 +528,20 @@ func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+/*
+UTILITIES
+*/
+
+func fromContext(key string, r *http.Request) (string, error) {
+	val, ok := context.GetOk(r, key)
+	if !ok {
+		return "", errors.New("Failed to retrieve value from context with key.")
+	}
+	v, ok := val.(string)
+	if !ok {
+		return "", errors.New("Type coersion of interface value to string failed.")
+	}
+	return v, nil
 }

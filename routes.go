@@ -44,6 +44,12 @@ var routes = Routes{
 		DeleteTagHandler,
 	},
 	Route{
+		"ReadNewestLocalizedContentEntriesForTag",
+		"GET",
+		"/app/{app-uuid}/tag/{tag}/locale/{locale}",
+		ReadAllContentForTagHandler,
+	},
+	Route{
 		"ReadAllContentForTag",
 		"GET",
 		"/app/{app-uuid}/tag/{tag}",
@@ -104,10 +110,10 @@ var routes = Routes{
 		AssetUploadURLHandler,
 	},
 	Route{
-		"UpdateUserPassword",
+		"UpdatePassword",
 		"PUT",
 		"/auth/user/password",
-		UpdateUserPasswordHandler,
+		UpdatePasswordHandler,
 	},
 	Route{
 		"UserCryptoBootstrap",
