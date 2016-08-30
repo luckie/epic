@@ -168,7 +168,7 @@ func ReadNewestLocalizedContentEntriesForTagHandler(w http.ResponseWriter, r *ht
 	vars := mux.Vars(r)
 	tag := vars["tag"]
 	locale := vars["locale"]
-	appID := vars["app-id"]
+	appID := vars["app-uuid"]
 	e, err := NewestLocalizedContentEntriesForTag(tag, locale, appID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

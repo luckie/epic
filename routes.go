@@ -47,7 +47,7 @@ var routes = Routes{
 		"ReadNewestLocalizedContentEntriesForTag",
 		"GET",
 		"/app/{app-uuid}/tag/{tag}/locale/{locale}",
-		ReadAllContentForTagHandler,
+		ReadNewestLocalizedContentEntriesForTagHandler,
 	},
 	Route{
 		"ReadAllContentForTag",
