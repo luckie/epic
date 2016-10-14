@@ -194,7 +194,7 @@ func CreateTag(tag string, appID string) error {
 	return nil
 }
 
-func TagContent(contentID string, tag string) error {
+func TagContent(contentID string, tag string, AppID string) error {
 	stmt, err := db.Prepare("select id from epic.tag where value = $1")
 	if err != nil {
 		return errors.New("Prepare select from tag | " + err.Error())
@@ -204,12 +204,12 @@ func TagContent(contentID string, tag string) error {
 	if err != nil {
 		return errors.New("QueryRow / Scan for tag | " + err.Error())
 	}
-	stmt, err = db.Prepare("insert into epic.content_tag (content_id, tag_id) values ($1, $2)")
+	stmt, err = db.Prepare("insert into epic.content_tag (content_id, tag_id, application_id) values ($1, $2, $3)")
 	if err != nil {
 		return errors.New("Prepare insert into content_tag | " + err.Error())
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(contentID, tagID)
+	_, err = stmt.Exec(contentID, tagID, AppID)
 	if err != nil {
 		return errors.New("Exec insert into content_tag | " + err.Error())
 	}

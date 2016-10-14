@@ -189,8 +189,9 @@ func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	contentID := vars["content-uuid"]
 	tag := vars["tag"]
+	appID := vars["app-uuid"]
 
-	err := TagContent(contentID, tag)
+	err := TagContent(contentID, tag, appID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
