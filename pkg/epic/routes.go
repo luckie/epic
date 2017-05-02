@@ -1,4 +1,4 @@
-package main
+package epic
 
 var routes = Routes{
 	Route{
@@ -62,6 +62,12 @@ var routes = Routes{
 		AssignTagToContentHandler,
 	},
 	Route{
+		"CreateApplication",
+		"POST",
+		"/app",
+		CreateApplicationHandler,
+	},
+	Route{
 		"Login",
 		"POST",
 		"/auth/login",
@@ -114,6 +120,12 @@ var routes = Routes{
 		"PUT",
 		"/auth/user/password",
 		UpdatePasswordHandler,
+	},
+	 Route{
+		"ResetPassword",
+		"POST",
+		"/auth/user/password",
+		ResetPasswordHandler,
 	},
 	Route{
 		"UserCryptoBootstrap",

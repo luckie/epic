@@ -19,10 +19,14 @@ If a port number other than 443 is specified, the server will use HTTP on the sp
 Any port number below 1025 requires administrative privileges (sudo).
 
 **Here is an example of launching Epic using TLS (HTTPS):**
-```sudo epic postgres://username:password@localhost/epic?sslmode=disable example.com```
+```
+sudo epic postgres://username:password@localhost/epic?sslmode=disable example.com
+```
 
 **Here is an example of launching Epic without TLS (HTTP) on port 8080:**
-```epic postgres://username:password@localhost/epic?sslmode=disable example.com 8080```
+```
+epic postgres://username:password@localhost/epic?sslmode=disable example.com 8080
+```
 
 ## Database Setup
 

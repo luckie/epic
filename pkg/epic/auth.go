@@ -1,4 +1,4 @@
-package main
+package epic
 
 import (
 	"crypto/ecdsa"
@@ -7,11 +7,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/chrisbenson/easyaws/pkg/easyaws"
 	"github.com/dgrijalva/jwt-go"
+	//"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
 	"golang.org/x/crypto/scrypt"
 	"regexp"
 	"time"
+	"os"
 )
 
 const (
@@ -36,7 +39,7 @@ type User struct {
 
 type App struct {
 	ID    uuid.UUID `json:"id, omitempty"`
-	Names string    `json:"name, omitempty"`
+	Name string    `json:"name, omitempty"`
 	Code  string    `json:"code, omitempty"`
 }
 
@@ -106,8 +109,8 @@ func Logout(userID string) error {
 }
 
 func CreateUser(user *User) (*User, error) {
-	unique, err := usernameUnique(user.Username)
-	if !unique {
+	err := usernameUnique(user.Username)
+	if err != nil {
 		return nil, errors.New("Username is not unique. | " + err.Error())
 	}
 	if err := validatePassword(user.Password); err != nil {
@@ -161,12 +164,27 @@ func CreateUser(user *User) (*User, error) {
 func GetUser(id string, appID string) (*User, error) {
 	user := User{}
 	u := &user
-	stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id inner join epic.application on application_user.application_id = application.id where epic_user.id = $1 and application.id = $2")
+	stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username, epic_user.password, application_user.application_id from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id inner join epic.application on application_user.application_id = application.id where epic_user.id = $1 and application.id = $2")
 	if err != nil {
 		return nil, errors.New("Prepare select from user | " + err.Error())
 	}
 	defer stmt.Close()
-	err = stmt.QueryRow(id, appID).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username)
+	err = stmt.QueryRow(id, appID).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.AppID)
+	if err != nil {
+		return nil, errors.New("QueryRow / Scan select from user | " + err.Error())
+	}
+	return u, nil
+}
+
+func GetUserFromEmail(email string, appID string) (*User, error) {
+	user := User{}
+	u := &user
+	stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username, epic_user.password, application_user.application_id from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id inner join epic.application on application_user.application_id = application.id where epic_user.email = $1 and application.id = $2")
+	if err != nil {
+		return nil, errors.New("Prepare select from user | " + err.Error())
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(email, appID).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.AppID)
 	if err != nil {
 		return nil, errors.New("QueryRow / Scan select from user | " + err.Error())
 	}
@@ -175,7 +193,7 @@ func GetUser(id string, appID string) (*User, error) {
 
 func GetAllUsers(appID string) ([]User, error) {
 	var users []User
-	stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id where application_user.application_id = $1")
+	stmt, err := db.Prepare("select epic_user.id, epic_user.first_name, epic_user.last_name, epic_user.email, epic_user.username, application_user.application_id from epic.user as epic_user inner join epic.application_user on application_user.user_id = epic_user.id where application_user.application_id = $1")
 	if err != nil {
 		return nil, errors.New("Prepare error in GetAllUsers() | " + err.Error())
 	}
@@ -186,7 +204,7 @@ func GetAllUsers(appID string) ([]User, error) {
 	}
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username); err != nil {
+		if err := rows.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.AppID); err != nil {
 			return nil, errors.New("Scan error in GetAllUsers() | " + err.Error())
 		}
 		if err := rows.Err(); err != nil {
@@ -297,6 +315,32 @@ func UpdatePassword(password string, userID string) error {
 	return nil
 }
 
+func ResetPassword(email string, appID string) error {
+	u, err := GetUserFromEmail(email, appID)
+	if err != nil {
+		return errors.New("ResetPassword() | GetUserFromEmail() | " + err.Error())
+	}
+	err = createToken(u)
+	if err != nil {
+		return errors.New("ResetPassword() | createToken() | " + err.Error())
+	}
+	to 	:= []string{u.Email}
+	from 	:= os.Getenv("EPIC_ADMIN_EMAIL")
+	if from == "" {
+		return errors.New("Can not reset user email until an admin email is set as the EPIC_ADMIN_EMAIL environmental variable.")
+	}
+	cc 	:= []string{}
+	bcc 	:= []string{}
+	subject := "Reset Password"
+	url 	:= os.Getenv("EPIC_RESET_PASSWORD_URL")
+	message	:= "Please click this link to reset your password:\n" + url + "/" + *u.Token
+	_, err = easyaws.SendMail(to, from, cc, bcc, subject, message, easyaws.SessionFromEnvVars())
+	if err != nil {
+		return errors.New("EasyAWS.SendMail() | " + err.Error())
+	}
+	return nil
+}
+
 func hashPassword(password string, salt string) (string, error) {
 	dk, err := scrypt.Key([]byte(password), []byte(salt), 16384, 8, 1, 32)
 	if err != nil {
@@ -324,18 +368,18 @@ func validatePassword(password string) error {
 	return nil
 }
 
-func usernameUnique(username string) (bool, error) {
+func usernameUnique(username string) error {
 	var id string
 	stmt, err := db.Prepare("select epic_user.id from epic.user as epic_user where epic_user.username = $1")
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer stmt.Close()
 	err = stmt.QueryRow(username).Scan(&id)
 	if err == nil {
-		return false, err
+		return errors.New("Username already exists.")
 	}
-	return true, nil
+	return nil
 }
 
 func createToken(user *User) error {
@@ -386,6 +430,7 @@ func parseToken(requestToken string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, errors.New("QueryRow / Scan | " + err.Error())
 	}
+
 	token, err := jwt.Parse(requestToken, func(token *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
 		//if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {

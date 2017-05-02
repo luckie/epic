@@ -1,8 +1,9 @@
-package main
+package epic
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
+	//"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,8 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/gorilla/context"
+	//"github.com/gorilla/context"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
 	"time"
 )
@@ -44,8 +46,9 @@ func ListContentHandler(w http.ResponseWriter, r *http.Request) {
 
 func CreateContentReservationHandler(w http.ResponseWriter, r *http.Request) {
 
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -91,8 +94,9 @@ func ReadContentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateContentHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -127,22 +131,24 @@ func ListTagsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateTagHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	vars := mux.Vars(r)
 	tag := vars["tag"]
 	appID := vars["app-uuid"]
-	err := CreateTag(tag, appID)
+	err = CreateTag(tag, appID)
 	if err != nil {
 		log.Println(err)
 	}
 }
 
 func DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	fmt.Fprint(w, "To be implemented.\n")
@@ -182,15 +188,17 @@ func ReadNewestLocalizedContentEntriesForTagHandler(w http.ResponseWriter, r *ht
 }
 
 func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	vars := mux.Vars(r)
 	contentID := vars["content-uuid"]
 	tag := vars["tag"]
+	AppID := vars["AppID"]
 
-	err := TagContent(contentID, tag)
+	err = TagContent(contentID, tag, AppID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -198,9 +206,47 @@ func AssignTagToContentHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func CreateApplicationHandler(w http.ResponseWriter, r *http.Request) {
+
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := r.Body.Close(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	app := App{}
+	if err := json.Unmarshal(body, &app); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	appID, err := CreateApplication(app.Name, app.Code)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		uuid := UUID{
+			UUID: appID.String(),
+		}
+		//
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(uuid); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
 func AssetUploadURLHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -274,9 +320,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	userID, err := fromContext("UserID", r)
+	userIDi, err := fromContext("UserID", r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userID, ok := userIDi.(string)
+	if !ok {
+		http.Error(w, "userID type assertion from interface{} to string failed.", http.StatusInternalServerError)
 		return
 	}
 	err = Logout(userID)
@@ -288,8 +339,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -320,16 +372,24 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
-		return
-	}
-	id := r.URL.Query().Get("id")
-	appID, err := fromContext("AppID", r)
+	err := verifyAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	id := r.URL.Query().Get("id")
+	appIDi, err := fromContext("AppID", r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	appID, ok := appIDi.(string)
+	if !ok {
+		http.Error(w, "userID type assertion from interface{} to string failed.", http.StatusInternalServerError)
+		return
+	}
+
+
 	if id != "" {
 		u, err := GetUser(id, appID)
 		user := *u
@@ -357,30 +417,38 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	var err error
 	userID := r.URL.Query().Get("user-id")
 	appID := r.URL.Query().Get("app-id")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	if userID == "" {
-		userID, err = fromContext("UserID", r)
+		userIDi, err := fromContext("UserID", r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		uID, ok := userIDi.(string)
+		if !ok {
+			http.Error(w, "userID type assertion from interface{} to string failed.", http.StatusInternalServerError)
+			return
+		}
+		userID = uID
 	}
 	if appID == "" {
-		appID, err = fromContext("AppID", r)
+		appIDi, err := fromContext("AppID", r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		aID, ok := appIDi.(string)
+		if !ok {
+			http.Error(w, "appID type assertion from interface{} to string failed.", http.StatusInternalServerError)
+			return
+		}
+		appID = aID
 	}
 	err = DeleteUser(userID, appID)
 	if err != nil {
@@ -405,39 +473,49 @@ func AuthHandler(h http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.Header().Set("Accept", "application/json")
 		token := r.Header.Get("Authorization")
+
 		if token != "" {
 			claims, err := Authenticate(token)
 			if err == nil {
-				//w.Header().Set("Authorization", token)
-				context.Set(r, "Token", token)
-				context.Set(r, "UserID", claims["UserID"])
-				context.Set(r, "FirstName", claims["FirstName"])
-				context.Set(r, "LastName", claims["LastName"])
-				context.Set(r, "Email", claims["Email"])
-				context.Set(r, "Username", claims["Username"])
-				context.Set(r, "AppID", claims["AppID"])
-				context.Set(r, "TokenExpires", claims["exp"])
-				context.Set(r, "TokenCreated", claims["iat"])
-				fmt.Println("TokenExpires: " + claims["exp"].(string))
-				fmt.Println("TokenCreated: " + claims["iat"].(string))
+				var epicCtxKey epicContextKey
+				epicCtx := epicContext{}
+				epicCtx.m = make(map[string]interface{}, 9)
+				epicCtx.Set("Token", token)
+				epicCtx.Set("UserID", claims["UserID"])
+				epicCtx.Set("FirstName", claims["FirstName"])
+				epicCtx.Set("LastName", claims["LastName"])
+				epicCtx.Set("Email", claims["Email"])
+				epicCtx.Set("Username", claims["Username"])
+				epicCtx.Set("AppID", claims["AppID"])
+				epicCtx.Set("TokenExpires", claims["exp"])
+				epicCtx.Set("TokenCreated", claims["iat"])
+				ctx := context.WithValue(r.Context(), epicCtxKey, epicCtx)
+				h.ServeHTTP(w, r.WithContext(ctx))
+			} else {
+
+				http.Error(w, "AuthHandler | Error returned from Authenticate(token).  " + err.Error(), http.StatusUnauthorized)
 			}
+		} else {
+			h.ServeHTTP(w, r)
 		}
-		h.ServeHTTP(w, r)
 	})
 }
 
-func verifyAdmin(r *http.Request) bool {
-	// Temp using AppID below from within the tokenID
-	// as a proxy for validating a user is an admin.
-	val, err := fromContext("AppID", r)
+func verifyAdmin(r *http.Request) error {
+	// Temp using AppID below from within the tokenID as a proxy for validating a user is an admin.
+	appIDi, err := fromContext("AppID", r)
 	if err != nil {
-		return false
+		return errors.Wrap(err, "verifyAdmin() | Error from fromContext()")
+	}
+	appID, ok := appIDi.(string)
+	if !ok {
+		return errors.New("verifyAdmin() | appID is used to verify admin, but type assertion from interface{} to string failed.")
 	}
 	// This test below is insuffient. Needs real test.
-	if val == "" {
-		return false
+	if appID == "" {
+		return errors.New("verifyAdmin() | appID is used to verify admin, but appID is blank.")
 	}
-	return true
+	return nil
 }
 
 func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -450,8 +528,9 @@ func NewUUIDHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
-	if !verifyAdmin(r) {
-		http.Error(w, "Unauthorized!", http.StatusUnauthorized)
+	err := verifyAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -468,9 +547,14 @@ func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	userID, err := fromContext("UserID", r)
+	userIDi, err := fromContext("UserID", r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userID, ok := userIDi.(string)
+	if !ok {
+		http.Error(w, "userID type assertion from interface{} to string failed.", http.StatusInternalServerError)
 		return
 	}
 	if user.ID.String() == "00000000-0000-0000-0000-000000000000" {
@@ -486,6 +570,38 @@ func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	//appID := r.URL.Query().Get("app-id")
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := r.Body.Close(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var reset Reset
+	if err := json.Unmarshal(body, &reset); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = ResetPassword(reset.Email, reset.AppID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+
+
+	/*
+	if err != nil{
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	*/
 }
 
 func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {
@@ -534,14 +650,30 @@ func UserCryptoBootstrapHandler(w http.ResponseWriter, r *http.Request) {
 UTILITIES
 */
 
-func fromContext(key string, r *http.Request) (string, error) {
-	val, ok := context.GetOk(r, key)
+func fromContext(key string, r *http.Request) (interface{}, error) {
+	var epicCtxKey epicContextKey
+	epicCtx, ok := r.Context().Value(epicCtxKey).(epicContext)
 	if !ok {
-		return "", errors.New("Failed to retrieve value from context with key.")
+		return nil, errors.New("fromContext() | Unable to get value out of Request.Context() and get epicContext struct using type assertion.")
 	}
-	v, ok := val.(string)
-	if !ok {
-		return "", errors.New("Type coersion of interface value to string failed.")
+	val := epicCtx.Get(key)
+	if val != nil {
+		return val, nil
+	} else {
+		return nil, errors.New("fromContext() | Unable to get non-nil interface{} value out of epicContext struct.")
 	}
-	return v, nil
+}
+
+type epicContextKey string
+
+type epicContext struct {
+	m map[string]interface{}
+}
+
+func (ec epicContext) Get(key string) interface{} {
+	return ec.m[key]
+}
+
+func (ec epicContext) Set(key string, value interface{}) {
+	ec.m[key] = value
 }

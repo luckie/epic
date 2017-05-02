@@ -1,4 +1,4 @@
-package main
+package epic
 
 import (
 	"database/sql"
@@ -60,6 +60,11 @@ type Err struct {
 
 type ID struct {
 	ID string `json:"id"`
+}
+
+type Reset struct {
+	Email string `json:"email"`
+	AppID string `json:"app-id"`
 }
 
 func NewestEntryForContentID(contentID string) (*Entry, error) {
@@ -194,7 +199,7 @@ func CreateTag(tag string, appID string) error {
 	return nil
 }
 
-func TagContent(contentID string, tag string) error {
+func TagContent(contentID string, tag string, AppID string) error {
 	stmt, err := db.Prepare("select id from epic.tag where value = $1")
 	if err != nil {
 		return errors.New("Prepare select from tag | " + err.Error())
@@ -204,16 +209,30 @@ func TagContent(contentID string, tag string) error {
 	if err != nil {
 		return errors.New("QueryRow / Scan for tag | " + err.Error())
 	}
-	stmt, err = db.Prepare("insert into epic.content_tag (content_id, tag_id) values ($1, $2)")
+	stmt, err = db.Prepare("insert into epic.content_tag (content_id, tag_id, application_id) values ($1, $2, $3)")
 	if err != nil {
 		return errors.New("Prepare insert into content_tag | " + err.Error())
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(contentID, tagID)
+	_, err = stmt.Exec(contentID, tagID, AppID)
 	if err != nil {
 		return errors.New("Exec insert into content_tag | " + err.Error())
 	}
 	return nil
+}
+
+func CreateApplication(Name string, Code string) (uuid.UUID, error) {
+	appID := uuid.NewV4()
+	stmt, err := db.Prepare("insert into epic.application (id, name, code) values ($1, $2, $3)")
+	if err != nil {
+		return appID, err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(appID.String(), Name, Code)
+	if err != nil {
+		return appID, err
+	}
+	return appID, nil
 }
 
 /*
@@ -251,32 +270,30 @@ func tagUnique(tag string) error {
 	return nil
 }
 
-// DOES THIS NEED UPDATING?
 func getLetsEncryptCache(app string) (string, error) {
 	var appID string
 	stmt, err := db.Prepare("select application.id from epic.application where application.code = $1")
 	if err != nil {
-		return "", err
+		return "", errors.New("D | " + err.Error())
 	}
 	defer stmt.Close()
 	err = stmt.QueryRow(app).Scan(&appID)
 	if err != nil {
-		return "", err
+		return "", errors.New("E | " + err.Error())
 	}
 	var data string
 	stmt, err = db.Prepare("select value from epic.config where name='letsencrypt' and application_id=$1")
 	if err != nil {
-		return "", err
+		return "", errors.New("F | " + err.Error())
 	}
 	defer stmt.Close()
 	err = stmt.QueryRow(appID).Scan(&data)
 	if err != nil {
-		return "", err
+		return "", errors.New("G | " + err.Error())
 	}
 	return data, nil
 }
 
-// DOES THIS NEED UPDATING?
 func updateLetsEncryptCache(data string, app string) error {
 	var appID string
 	stmt, err := db.Prepare("select application.id from epic.application where application.code = $1")

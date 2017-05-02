@@ -1,15 +1,15 @@
 package main
-
+/*
 import (
 	"fmt"
 	"io"
-	"log"
+	//"log"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/urfave/cli"
+	//"github.com/urfave/cli"
 )
 
 var (
@@ -18,18 +18,20 @@ var (
 	port int
 	err error
 
-	Trace   *log.Logger
-	Info    *log.Logger
-	Warning *log.Logger
-	Error   *log.Logger
+	//Trace   *log.Logger
+	//Info    *log.Logger
+	//Warning *log.Logger
+	//Error   *log.Logger
 )
 
 func main() {
   var db string
 	var port int
+	var appCode string
 
 	var dbArg string
 	var portArg string
+	//var appArg string
 
 	dbEnv 	:= os.Getenv("EPIC_DATABASE")
 	portEnv	:= os.Getenv("EPIC_PORT")
@@ -39,6 +41,12 @@ func main() {
   app := cli.NewApp()
 
   app.Flags = []cli.Flag {
+	cli.StringFlag{
+		Name:        "app, a",
+		Usage:       "Epic application.",
+		Destination: &portArg,
+		EnvVar: 		 "EPIC_APP",
+	},
     cli.StringFlag{
       Name:        "database, d",
       Usage:       "Connection string for Epic database.",
@@ -76,7 +84,7 @@ func main() {
 			port = 443
 		}
 		initSQLDatabase(db)
-		Serve("", port)
+		Serve("", port, appCode)
 		return nil
 	}
 
@@ -110,6 +118,9 @@ func Init(
 }
 
 func old_main() {
+	//to make Compile
+	var appCode string
+
 	Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 
 	switch len(os.Args) {
@@ -164,12 +175,12 @@ func old_main() {
 					} else {
 						initSQLDatabase(os.Args[1])
 						//initServer(os.Args[2], port)
-						Serve(os.Args[2], port)
+						Serve(os.Args[2], port, appCode)
 					}
 				} else {
 					initSQLDatabase(os.Args[1])
 					//initServer(os.Args[2], 443)
-					Serve(os.Args[2], 443)
+					Serve(os.Args[2], 443, appCode)
 				}
 
 			}
@@ -195,3 +206,4 @@ func help() {
 	fmt.Println("PUT /content/{uuid}       |  e.g. PUT /content/123e4567-e89b-12d3-a456-426655440000")
 	fmt.Println("GET /app/{app}/tag/{tag}  |  e.g. GET /app/my-app/tag/my-tag")
 }
+*/
